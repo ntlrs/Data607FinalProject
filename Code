@@ -1,0 +1,214 @@
+
+```{r setup, echo=FALSE}
+library(knitr)
+library(googleway)
+library(ggplot2)
+library(ggmap)
+library(jsonlite)
+library(dplyr)
+library(lubridate)
+library(formattable)
+library(hrbrthemes)
+```
+
+
+```{r}
+citibikedata <- read.csv("/Users/ntlrsmllghn/Downloads/201709-citibike-tripdata.csv", stringsAsFactors = FALSE, header= TRUE)
+head(citibikedata)
+```
+```{r}
+google_key <- "AIzaSyAtu9cW4c01ucOJPs9MZewbPAPKrJhTkbw"
+map <- google_map(key = google_key) %>%
+  add_bicycling()
+```
+```{r}
+citibikedata <- citibikedata[c(1:11, 13)]
+``` 
+```{r}
+startstation <- data.frame(citibikedata$start.station.latitude, citibikedata$start.station.longitude)
+endstation <-data.frame(citibikedata$end.station.latitude, citibikedata$end.station.longitude)
+names(startstation) <- c("latitude", "longitude")
+names(endstation) <- c("latitude", "longitude")
+stations <- data.frame(citibikedata$start.station.id, citibikedata$start.station.name, citibikedata$start.station.latitude, citibikedata$start.station.longitude)
+names(stations) <- c("stationID", "stationname", "lat", "lon")
+stations <- unique(stations)
+```
+
+
+```{r}
+google_map(key = google_key, data = stations) %>%
+ add_markers(lat = "lat", lon = "lon", opacity = .5)
+```
+
+
+```
+citibikedata$tripmin <- (citibikedata$tripduration/60)
+summary(citibikedata$tripmin)
+```
+
+
+```{r, echo=FALSE}
+new <- do.call( rbind , strsplit( as.character( citibikedata$starttime) , " " ) )
+citibikedata <- cbind(citibikedata, start.date = new[,2] , start.time = new[,1])
+new2 <- do.call( rbind , strsplit( as.character( citibikedata$stoptime) , " " ) )
+citibikedata <- cbind(citibikedata, end.date = new[,2] , end.time = new[,1])
+```
+
+
+
+```{r}
+citibikedata$usertype <- as.factor(citibikedata$usertype)
+count <- count(citibikedata, usertype)
+count$Pct <- count$n / sum(count$n)
+count
+```
+
+
+```{r}
+ggplot(citibikedata) + geom_bar(aes(usertype), 
+                                fill = "blue", 
+                                width = 0.5)
+```
+
+
+
+```{r}
+subroutes <- subset(citibikedata, usertype == "Subscriber")
+custroutes <- subset(citibikedata, usertype == "Customer")
+```
+
+
+```{r}
+subroutes$route <- paste(subroutes$start.station.name,subroutes$end.station.name,sep=" to ")
+custroutes$routes <- paste(custroutes$start.station.name,custroutes$end.station.name,sep=" to ")
+```
+
+
+```{r}
+as.data.frame(sort(table(subroutes$route),decreasing=TRUE)[1:10])
+```
+
+
+
+```{r, echo=FALSE}
+as.data.frame(sort(table(custroutes$route),decreasing=TRUE)[1:10])
+```
+
+```{r}
+suborigin <- subroutes %>% group_by(route, start.station.latitude, start.station.longitude) %>% summarize(n = n()) %>% arrange(desc(n)) %>% head(n=10)
+suborigin 
+```
+
+
+
+```{r}
+suborigin <- suborigin[c(2,3)]
+names(suborigin) <- c("latitude", "longitude")
+suborigin
+```
+
+```{r}
+subend <- subroutes %>% group_by(route, end.station.latitude, end.station.longitude) %>% summarize(n = n()) %>% arrange(desc(n)) %>% head(n=10)
+subend <- subend[c(2,3)]
+names(subend) <- c("latitude", "longitude")
+subend
+```
+
+
+```{r}
+subdf <- data.frame(from = c(suborigin),
+                 to = c(subend))
+subdf$start <- paste(subdf$from.latitude,subdf$from.longitude,sep=",")
+subdf$end <- paste(subdf$to.latitude,subdf$to.longitude,sep=",")
+```
+
+
+```{r}
+google_map(data = subdf, key = google_key) %>%
+  add_heatmap(lat = "from.latitude", lon = "from.longitude", option_radius = 0.005)
+```
+
+
+```{r}
+google_map(data = subdf, key = google_key) %>%
+  add_heatmap(lat = "to.latitude", lon = "to.longitude", option_radius = 0.005)
+```
+
+
+
+```{r}
+custorigin <- custroutes %>% group_by(routes, start.station.latitude, start.station.longitude) %>% summarize(n = n()) %>% arrange(desc(n)) %>% head(n=10)
+custorigin <- custorigin[c(2,3)]
+names(custorigin) <- c("latitude", "longitude")
+custorigin
+```
+```{r}
+custend <- custroutes %>% group_by(routes, end.station.latitude, end.station.longitude) %>% summarize(n = n()) %>% arrange(desc(n)) %>% head(n=10)
+custend <- custend[c(2,3)]
+names(custend) <- c("latitude", "longitude")
+custend
+```
+
+```{r}
+custdf <- data.frame(from = c(custorigin),
+                 to = c(custend))
+```
+```{r}
+google_map(data = custdf, key = google_key) %>%
+  add_heatmap(lat = "from.latitude", lon = "from.longitude", option_radius = 0.01)
+```
+```{r}
+google_map(data = custdf, key = google_key) %>%
+  add_heatmap(lat = "to.latitude", lon = "to.longitude", option_radius = 0.01)
+```
+
+
+
+```{r, echo=FALSE}
+summary(subroutes$tripmin)
+```
+Customers
+```{r, echo=FALSE}
+summary(custroutes$tripmin)
+```
+
+```{r}
+boxplot(tripmin~usertype, data=citibikedata, main=toupper("Trip Time"), ylim=c(0,60), xlab="User Type", ylab="Time", col="blue")
+```
+
+
+```{r}
+citibikedata$timestamp <-  strftime(citibikedata$starttime,"%Y-%m-%d %H:%M:%S")
+```
+```{r}
+citibikedata$ridehours <- hour(citibikedata$timestamp)
+```
+
+```{r}
+ggplot(citibikedata, aes(ridehours, fill=usertype, color=usertype)) + geom_histogram(
+   binwidth= 1,
+   position="identity",
+   alpha=0.5
+ )
+```
+
+
+```{r}
+heatmap <- transform(citibikedata, freq = ave(seq(nrow(citibikedata)), ridehours, FUN=length))
+```
+
+```{r}
+ggplot(heatmap, aes(x = ridehours,y=usertype, fill = freq)) +
+    viridis::scale_fill_viridis(name="Trip Hours",
+                       option = 'C',
+                       direction = 1,
+                       na.value = "grey93") +
+    geom_tile(color = 'white', size = 0.1) +
+    
+    scale_x_continuous(
+      expand = c(0, 0),
+      breaks = seq(0, 24, length = 25),
+      labels = c("00", "01", "02", "03", "04", "05",
+                 "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18","19", "20", "21", "22", "23")) 
+```
+
