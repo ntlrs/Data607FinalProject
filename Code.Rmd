@@ -13,18 +13,22 @@ library(hrbrthemes)
 
 
 ```{r}
+#load data into R
 citibikedata <- read.csv("/Users/ntlrsmllghn/Downloads/201709-citibike-tripdata.csv", stringsAsFactors = FALSE, header= TRUE)
 head(citibikedata)
 ```
 ```{r}
+#Google API key
 google_key <- "AIzaSyAtu9cW4c01ucOJPs9MZewbPAPKrJhTkbw"
 map <- google_map(key = google_key) %>%
   add_bicycling()
 ```
 ```{r}
+#subset data useful for analysis
 citibikedata <- citibikedata[c(1:11, 13)]
 ``` 
 ```{r}
+#create dataframes for start and end station, include lon, lat, station names
 startstation <- data.frame(citibikedata$start.station.latitude, citibikedata$start.station.longitude)
 endstation <-data.frame(citibikedata$end.station.latitude, citibikedata$end.station.longitude)
 names(startstation) <- c("latitude", "longitude")
@@ -36,12 +40,14 @@ stations <- unique(stations)
 
 
 ```{r}
+#build map to plot station data
 google_map(key = google_key, data = stations) %>%
  add_markers(lat = "lat", lon = "lon", opacity = .5)
 ```
 
 
-```
+```{r}
+#summerary of trip duration
 citibikedata$tripmin <- (citibikedata$tripduration/60)
 summary(citibikedata$tripmin)
 ```
@@ -57,6 +63,7 @@ citibikedata <- cbind(citibikedata, end.date = new[,2] , end.time = new[,1])
 
 
 ```{r}
+#count user types for analysis
 citibikedata$usertype <- as.factor(citibikedata$usertype)
 count <- count(citibikedata, usertype)
 count$Pct <- count$n / sum(count$n)
